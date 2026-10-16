@@ -4,8 +4,8 @@
 
 #include <cmath>
 
-LUA_CFUNCTION p_original_UnitXP = NULL;
-LUA_CFUNCTION p_UnitXP = reinterpret_cast<LUA_CFUNCTION>(Offsets::FUN_UNITXP);
+FUN_REGISTERFUNCTION p_original_RegisterFunction = NULL;
+FUN_REGISTERFUNCTION p_RegisterFunction = reinterpret_cast<FUN_REGISTERFUNCTION>(Offsets::FUN_REGISTER_FUNCTION);
 
 static float distance3D(C3Vector v1, C3Vector v2) {
     float dx = v2.x - v1.x;
@@ -15,7 +15,7 @@ static float distance3D(C3Vector v1, C3Vector v2) {
     return sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-static uint32_t InteractNearest()
+static uint32_t InteractNearest(int autoloot)
 {
     if (!Game::IsInWorld()) return 0;
 
@@ -31,32 +31,49 @@ static uint32_t InteractNearest()
 
     float bestDistance = 1000.0f;
 
+    // The player's own fishing bobber. It lands out of the 5 yard reach, so it has its own range,
+    // and it wins over every other candidate.
+    uint32_t bobber = 0;
+
     while (currentObject != 0 && (currentObject & 1) == 0)
     {
         uint64_t guid = *reinterpret_cast<uint64_t*>(currentObject + 0x30);
         uint32_t pointer = Game::GetObjectPointer(guid);
         uint32_t type = *reinterpret_cast<uint32_t*>(pointer + 0x14);
 
-        uint64_t summonedByGUID = *reinterpret_cast<uint64_t*>(*reinterpret_cast<uint32_t*>(pointer + 0x8) + 0x30);
-        uint32_t summonedBy = Game::GetObjectPointer(summonedByGUID);
-
-        if (summonedByGUID != 0 && summonedBy != 0)
-        {
-            uint32_t owner = *reinterpret_cast<uint32_t*>(summonedBy + 0x14);
-            if (owner == ObjectType::PLAYER)
-            {
-                currentObject = *reinterpret_cast<uint32_t*>(currentObject + 0x3C);
-                continue;
-            }
-        }
-
         if (type == ObjectType::UNIT)
         {
+            // UNIT_FIELD_SUMMONEDBY. Only units have it: on a gameobject, descriptor + 0x30 is the rotation.
+            uint64_t summonedByGUID = *reinterpret_cast<uint64_t*>(*reinterpret_cast<uint32_t*>(pointer + 0x8) + 0x30);
+            uint32_t summonedBy = Game::GetObjectPointer(summonedByGUID);
+
+            if (summonedByGUID != 0 && summonedBy != 0)
+            {
+                uint32_t owner = *reinterpret_cast<uint32_t*>(summonedBy + 0x14);
+                if (owner == ObjectType::PLAYER)
+                {
+                    currentObject = *reinterpret_cast<uint32_t*>(currentObject + 0x3C);
+                    continue;
+                }
+            }
+
             oPos = Game::GetUnitPosition(currentObject);
         }
         else if (type == ObjectType::GAMEOBJECT)
         {
             oPos = Game::GetObjectPosition(currentObject);
+
+            if (Game::GetObjectType(pointer) == GameObjectType::GO_TYPE_FISHINGNODE)
+            {
+                // The server refuses a bobber that another player cast, so skip those.
+                if (Game::GetObjectCreator(pointer) == playerGUID && distance3D(oPos, pPos) <= FISHING_BOBBER_RANGE)
+                {
+                    bobber = currentObject;
+                }
+
+                currentObject = *reinterpret_cast<uint32_t*>(currentObject + 0x3C);
+                continue;
+            }
         }
         else
         {
@@ -90,6 +107,13 @@ static uint32_t InteractNearest()
         currentObject = *reinterpret_cast<uint32_t*>(currentObject + 0x3C);
     }
 
+    if (bobber != 0)
+    {
+        uint64_t bobberGUID = *reinterpret_cast<uint64_t*>(bobber + 0x30);
+        Game::Interact(Game::GetObjectPointer(bobberGUID), autoloot, Offsets::FUN_RIGHT_CLICK_OBJECT);
+        return 1;
+    }
+
     if (candidate == -1) return 0;
 
     uint64_t candidateGUID = *reinterpret_cast<uint64_t*>(candidate + 0x30);
@@ -99,28 +123,49 @@ static uint32_t InteractNearest()
     if (candidateType == ObjectType::UNIT)
     {
         Game::SetTarget(candidateGUID);
-        Game::Interact(candidate, 1, Offsets::FUN_RIGHT_CLICK_UNIT);
+        Game::Interact(candidate, autoloot, Offsets::FUN_RIGHT_CLICK_UNIT);
     }
     else
     {
-        Game::Interact(candidatePointer, 1, Offsets::FUN_RIGHT_CLICK_OBJECT);
+        Game::Interact(candidatePointer, autoloot, Offsets::FUN_RIGHT_CLICK_OBJECT);
     }
 
     return 1;
 }
 
-int __fastcall detoured_UnitXP(void* L)
+// InteractNearest(autoloot), called from Interact.lua. autoloot is 1 or 0, and 0 when it is left out.
+static int __fastcall Script_InteractNearest(void* L)
 {
-    if (Lua::GetTop(L) >= 2)
+    int autoloot = 0;
+    if (Lua::GetTop(L) >= 1)
     {
         const char* arg = Lua::ToString(L, 1);
-        if (strcmp(arg, "interact") == 0)
-        {
-            InteractNearest();
-            return 1;
-        }
+        autoloot = (arg != nullptr && strcmp(arg, "1") == 0) ? 1 : 0;
     }
-    return p_original_UnitXP(L);
+
+    InteractNearest(autoloot);
+    return 0;
+}
+
+// The client registers its world functions one at a time. InteractNearest goes in right after UnitXP,
+// so it lands in the world Lua state and not the login screen's. Nothing else hooks UnitXP itself any more,
+// so UnitXP_SP3 has it to itself.
+static void __fastcall detoured_RegisterFunction(const char* name, LUA_CFUNCTION function)
+{
+    p_original_RegisterFunction(name, function);
+
+    if (name != nullptr && strcmp(name, "UnitXP") == 0)
+    {
+        p_original_RegisterFunction("InteractNearest", &Script_InteractNearest);
+    }
+}
+
+// FrameScript_RegisterFunction as it ships (56 57 8B F9 E8), or a jmp that another DLL put there.
+static bool RegisterFunctionLooksRight()
+{
+    const uint8_t* head = reinterpret_cast<const uint8_t*>(Offsets::FUN_REGISTER_FUNCTION);
+    const uint8_t stock[] = { 0x56, 0x57, 0x8B, 0xF9, 0xE8 };
+    return memcmp(head, stock, sizeof(stock)) == 0 || head[0] == 0xE9;
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
@@ -130,17 +175,23 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         case DLL_PROCESS_ATTACH:
             DisableThreadLibraryCalls(hModule);
 
+            // An unknown exe: load, do nothing. Interact.lua then shows its warning.
+            if (!RegisterFunctionLooksRight())
+            {
+                break;
+            }
+
             if (MH_Initialize() != MH_OK)
             {
                 return FALSE;
             }
 
-            if (MH_CreateHook(p_UnitXP, &detoured_UnitXP, reinterpret_cast<LPVOID*>(&p_original_UnitXP)) != MH_OK)
+            if (MH_CreateHook(p_RegisterFunction, &detoured_RegisterFunction, reinterpret_cast<LPVOID*>(&p_original_RegisterFunction)) != MH_OK)
             {
                 return FALSE;
             }
 
-            if (MH_EnableHook(p_UnitXP) != MH_OK)
+            if (MH_EnableHook(p_RegisterFunction) != MH_OK)
             {
                 return FALSE;
             }

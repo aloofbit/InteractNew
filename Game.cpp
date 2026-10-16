@@ -58,6 +58,16 @@ namespace Game
         return (flags & flag) == flag;
     }
 
+    uint64_t GetObjectCreator(uint32_t object)
+    {
+        return *reinterpret_cast<uint64_t*>(*reinterpret_cast<uint32_t*>(object + 0x8) + GameObjectFields::GO_CREATED_BY);
+    }
+
+    uint32_t GetObjectType(uint32_t object)
+    {
+        return *reinterpret_cast<uint32_t*>(*reinterpret_cast<uint32_t*>(object + 0x8) + GameObjectFields::GO_TYPE_ID);
+    }
+
     void SetTarget(uint64_t guid)
     {
         typedef void __stdcall func(uint64_t guid);

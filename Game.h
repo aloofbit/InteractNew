@@ -23,13 +23,31 @@ enum Offsets
     FUN_RIGHT_CLICK_UNIT =      0x60BEA0,
     FUN_RIGHT_CLICK_OBJECT =    0x5F8660,
     FUN_SET_TARGET =            0x493540,
-    FUN_UNITXP =                0x517350,
+    FUN_REGISTER_FUNCTION =     0x704120,   // FrameScript_RegisterFunction(name, fn): into the current Lua state
     VISIBLE_OBJECTS =           0xB41414,
 };
+
+// Gameobject descriptor fields, as byte offsets from the descriptor pointer at object + 0x8.
+// OBJECT_END is field 0x06; OBJECT_FIELD_CREATED_BY is OBJECT_END + 0x00 and
+// GAMEOBJECT_TYPE_ID is OBJECT_END + 0x0F (UpdateFields.h, 1.12.1).
+enum GameObjectFields
+{
+    GO_CREATED_BY =             0x18,
+    GO_TYPE_ID =                0x54,
+};
+
+enum GameObjectType
+{
+    GO_TYPE_FISHINGNODE =       17,
+};
+
+// The client casts the bobber 10 to 20 yards out. The server finds fishing pools within 20 yards of it.
+constexpr float FISHING_BOBBER_RANGE = 30.0f;
 
 typedef int(__fastcall* LUA_CFUNCTION)(void* L);
 typedef const char* (__fastcall* LUA_TOSTRING)(void* L, int index);
 typedef void(__thiscall* FUN_ONRIGHTCLICK)(uint32_t pointer, int autoloot);
+typedef void(__fastcall* FUN_REGISTERFUNCTION)(const char* name, LUA_CFUNCTION function);
 
 typedef struct 
 {
@@ -52,6 +70,9 @@ namespace Game
 
     bool IsUnitLootable(uint32_t unit);
     bool IsUnitSkinnable(uint32_t unit);
+
+    uint64_t GetObjectCreator(uint32_t object);
+    uint32_t GetObjectType(uint32_t object);
 
     void SetTarget(uint64_t guid);
 

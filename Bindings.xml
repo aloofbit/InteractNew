@@ -1,5 +1,8 @@
 <Bindings>
     <Binding name="Interact" header="INTERACT">
-        UnitXP("interact", 1)
+        Interact(0)
+    </Binding>
+    <Binding name="Interact (auto-loot)">
+        Interact(1)
     </Binding>
 </Bindings>
