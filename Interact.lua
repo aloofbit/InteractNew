@@ -19,3 +19,13 @@ function Interact(autoloot)
 
     InteractNearest(autoloot)
 end
+
+-- /interact in a macro. "/interact loot" auto-loots, like the second binding.
+SLASH_INTERACT1 = '/interact'
+SlashCmdList['INTERACT'] = function(msg)
+    if string.lower(msg or '') == 'loot' then
+        Interact(1)
+    else
+        Interact(0)
+    end
+end

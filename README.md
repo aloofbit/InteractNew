@@ -27,6 +27,10 @@ If you've done everything correctly, you should be able to find two new keybindi
 
 To interact with a nearby object, press the associated key.
 
+### Macros
+
+`/interact` does the same as the 'Interact' key. `/interact loot` does the same as 'Interact (auto-loot)'.
+
 ### How it loads
 
 The DLL adds one Lua function, `InteractNearest(autoloot)`. It does not hook `UnitXP`, so it works next to UnitXP_SP3.
