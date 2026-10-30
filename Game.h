@@ -44,6 +44,9 @@ enum GameObjectType
 // The client casts the bobber 10 to 20 yards out. The server finds fishing pools within 20 yards of it.
 constexpr float FISHING_BOBBER_RANGE = 30.0f;
 
+// The key reaches only objects in this cone in front of the player (total angle). The bobber is not limited by it.
+constexpr float INTERACT_CONE_DEGREES = 145.0f;
+
 typedef int(__fastcall* LUA_CFUNCTION)(void* L);
 typedef const char* (__fastcall* LUA_TOSTRING)(void* L, int index);
 typedef void(__thiscall* FUN_ONRIGHTCLICK)(uint32_t pointer, int autoloot);
@@ -65,6 +68,8 @@ namespace Game
     int GetUnitHealth(uint32_t unit);
 
     C3Vector GetUnitPosition(uint32_t unit);
+
+    float GetUnitFacing(uint32_t unit);
 
     void Interact(uint32_t pointer, int autoloot, int fun_ptr);
 

@@ -2,7 +2,9 @@
 
 Interact is a mod that allows you to bind a key which you can then use to interact with the world around you. Using the key you will be able to pick herbs, mine veins, loot enemies, catch fish and much more without the need to use the mouse to target the object.
 
-The mod works by comparing the distances of visible objects that are close to the player. The best candidate for interaction is then selected on a number of conditions (closest, is lootable, is skinnable).
+The mod looks at the visible objects within 5 yards that are in front of the player. It picks the nearest living unit, lootable or skinnable corpse, or gameobject.
+
+The key reaches only a cone of 145 degrees in front of the player (72.5 degrees to each side of the facing direction). An NPC behind or beside you is not picked. Your own fishing bobber is the exception: the cone does not apply to it.
 
 This is a fork of [vargv666/Interact](https://github.com/vargv666/Interact), which is luskanek's Interact. It adds fishing and its own Lua function.
 

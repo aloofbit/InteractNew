@@ -15,6 +15,24 @@ static float distance3D(C3Vector v1, C3Vector v2) {
     return sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+// True when the object is inside the INTERACT_CONE_DEGREES cone in front of the player.
+// C3Vector names its first float y, but the client stores world X there (unit + 0x9B8 is X).
+// Facing is measured from world +X toward world +Y, so the angle is atan2(world dY, world dX),
+// which is atan2(dx, dy) in C3Vector names.
+static bool isInFront(C3Vector player, float facing, C3Vector object)
+{
+    const float pi = 3.14159265f;
+
+    float worldDX = object.y - player.y;
+    float worldDY = object.x - player.x;
+
+    float difference = atan2f(worldDY, worldDX) - facing;
+    while (difference > pi) difference -= 2.0f * pi;
+    while (difference < -pi) difference += 2.0f * pi;
+
+    return fabsf(difference) <= INTERACT_CONE_DEGREES / 2.0f * pi / 180.0f;
+}
+
 static uint32_t InteractNearest(int autoloot)
 {
     if (!Game::IsInWorld()) return 0;
@@ -27,6 +45,7 @@ static uint32_t InteractNearest(int autoloot)
     uint32_t player = Game::GetObjectPointer(playerGUID);
 
     C3Vector pPos = Game::GetUnitPosition(player);
+    float pFacing = Game::GetUnitFacing(player);
     C3Vector oPos;
 
     float bestDistance = 1000.0f;
@@ -82,7 +101,7 @@ static uint32_t InteractNearest(int autoloot)
         }
 
         float distance = distance3D(oPos, pPos);
-        if (distance <= 5.0 && distance < bestDistance)
+        if (distance <= 5.0 && distance < bestDistance && isInFront(pPos, pFacing, oPos))
         {
             if (type == ObjectType::UNIT)
             {

@@ -39,6 +39,12 @@ namespace Game
         };
     }
 
+    // Facing in radians, measured from world +X toward world +Y. It is the float after the position.
+    float GetUnitFacing(uint32_t unit)
+    {
+        return *reinterpret_cast<float*>(unit + 0x09C4);
+    }
+
     void Interact(uint32_t pointer, int autoloot, int fun_ptr)
     {
         FUN_ONRIGHTCLICK function = reinterpret_cast<FUN_ONRIGHTCLICK>(fun_ptr);
